@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Academy Pizza</title>
+		<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+		<meta content="width=device-width,initial-scale=1.0" name="viewport">
+		<link rel="stylesheet" href="./css/new2.css"> <link href="https://fonts.googleapis.com/css?family=Anton" rel="stylesheet">
+		<link href="https://fonts.googleapis.com/css?family=Indie+Flower" rel="stylesheet">
+
+	</head>
+	<body>
+	<div class="w3-container w3-red">
+		<div id="menuBG">
+			<h1 style="margin:0 0px 0 20px;">Academy Pizza</h1>
+				<img src="./img2/pizza.jpg"	alt="image error" class="center">
+				&nbsp; 
+				&nbsp; 
+			<input id="btnOrder" type="button" onclick="getReceipt()" 
+				value="Place Order">
+			<form id="frmMenu">
+			<div class="grid-container">
+				<div class="menu">
+					<h3>Size:</h3>
+					<h2>
+					<input class="size" type="radio" name="Size" value="Personal Pizza"> Personal Pizza<br>
+					<input class="size" type="radio" name="Size" value="Medium Pizza"> Medium Pizza<br>
+					<input class="size" type="radio" name="Size" value="Large Pizza" checked> Large Pizza<br>
+					<input class="size" type="radio" name="Size" value="Extra Large Pizza"> Extra Large Pizza<br>
+					</h2>
+				</div>
+				</div>
+				<div class="grid-container">
+				<div class="menu">
+					<h3>Meats:</h3>
+					<h2>
+					<input class="meats" type="checkbox" name="Meat" value="Pepperoni"> Pepperoni<br>
+					<input class="meats" type="checkbox" name="Meat" value="Sausage"> Sausage <br>
+					<input class="meats" type="checkbox" name="Meat" value="Canadian Bacon"> Canadian Bacon<br> 
+					<input class="meats" type="checkbox" name="Meat" value="Ground Beef"> Ground Beef<br>
+					<input class="meats" type="checkbox" name="Meat" value="Anchovy"> Anchovy<br>
+					<input class="meats" type="checkbox" name="Meat" value="Chicken"> Chicken<br>
+					</h2>
+				</div>
+				</div>
+				<div class="grid-container">
+				<div class="menu">
+					<h3>Cheese:</h3>
+					<h2>
+					<input class="cheese" type="checkbox" name="Cheese" value="No Cheese"> No Cheese<br>
+					<input class="cheese" type="checkbox" name="Cheese" value="Cheese"> Cheese <br>
+					<input class="cheese" type="checkbox" name="Cheese" value="Extra Cheese"> Extra Cheese<br> 
+					</h2>
+				</div>
+				</div>
+				<div class="grid-container">
+				<div class="menu">
+					<h3>Veggies:</h3>
+					<h2>
+					<input class="veggies" type="checkbox" name="Veggies" value="Tomatoes"> Tomatoes<br>
+					<input class="veggies" type="checkbox" name="Veggies" value="Onions"> Onions <br>
+					<input class="veggies" type="checkbox" name="Veggies" value="Olives"> Olives<br> 
+					<input class="veggies" type="checkbox" name="Veggies" value="Green Peppers"> Green Peppers<br>
+					<input class="veggies" type="checkbox" name="Veggies" value="Mushrooms"> Mushrooms<br>
+					<input class="veggies" type="checkbox" name="Veggies" value="Pineapple"> Pineapple<br>
+					<input class="veggies" type="checkbox" name="Veggies" value="Spinach"> Spinach<br>
+					<input class="veggies" type="checkbox" name="Veggies" value="Jalapeno"> Jalapeno<br>
+					</h2>
+				</div>
+				<div class="grid-container">
+				<div class="menu">
+					<h3>Crust:</h3>
+					<h2>
+					<input class="crust" type="checkbox" name="Crust" value="Plain Crust"> Plain Crust<br>
+					<input class="crust" type="checkbox" name="Crust" value="Garlic Butter Crust"> Garlic Butter Crust<br>
+					<input class="crust" type="checkbox" name="Crust" value="Cheese Stuffed Crust"> Cheese Stuffed Crust<br> 
+					<input class="crust" type="checkbox" name="Crust" value="Spicy Crust"> Spicy Crust<br>
+					<input class="crust" type="checkbox" name="Crust" value="House Special Crust"> House Special Crust<br> 
+					</h2>
+				</div>
+				</div>
+				<div class="grid-container">
+				<div class="menu">
+					<h3>Sauce:</h3>
+					<h2>
+					<input class="sauce" type="checkbox" name="Sauce" value="Marinara"> Marinara<br>
+					<input class="sauce" type="checkbox" name="Sauce" value="White Sauce"> White Sauce <br>
+					<input class="sauce" type="checkbox" name="Sauce" value="Barbecue Sauce"> Barbecue Sauce<br> 
+					<input class="sauce" type="checkbox" name="Sauce" value="No Sauce"> No Sauce<br>
+					</h2>
+				</div>
+				</div>
+				<div id="cart">
+					<div id="showText"></div>
+					<div id="totalPrice"></div>
+				</div>
+				</div>
+			</form>
+			<input id="btnOrder" type="button" onclick="getReceipt()" 
+				value="Place Order">
+		</div>
+		<script src="./js/final_drill_basic.js"></script>
+	</body>
+</html>
