@@ -12,7 +12,7 @@ CREATE VIEW dbo.vw_ProductSalesForecast
 
 GO
 
-    --Displays the view showing the state of the table before nore forecasts were added--
+    --Displays the view showing the state of the table before more forecasts were added--
 
 	SELECT * 
 	   FROM dbo.vw_ProductSalesForecast
