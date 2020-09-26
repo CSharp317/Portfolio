@@ -43,8 +43,6 @@ namespace Business.Controllers
         }
 
         // POST: Employee/Create
-        // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
-        // more details see https://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
         public ActionResult Create([Bind(Include = "ID,Name,EnrollmentDate")] Employee employee)
@@ -75,8 +73,7 @@ namespace Business.Controllers
         }
 
         // POST: Employee/Edit/5
-        // To protect from overposting attacks, please enable the specific properties you want to bind to, for 
-        // more details see https://go.microsoft.com/fwlink/?LinkId=317598.
+     
         [HttpPost]
         [ValidateAntiForgeryToken]
         public ActionResult Edit([Bind(Include = "ID,Name,EnrollmentDate")] Employee employee)
