@@ -1,0 +1,427 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp2.2</TargetFramework>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.2" />
+    <PackageReference Include="Dapper" Version="1.60.6" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <ProjectReference Include="..\DataAccessLayer\DataAccessLayer.csproj" />
+  </ItemGroup>
+
+</Project>
+
+Api/Controllers/EmployeeController.cs 
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Api.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class EmployeeController : ControllerBase
+    {
+        private IEmployeeRepository _employeeRepo;
+        public EmployeeController(IEmployeeRepository employeeRepo)
+        {
+            _employeeRepo = employeeRepo;
+        }
+        [HttpGet]
+        public async Task<string> Get()
+        {
+            var employees = await _employeeRepo.GetAllAsync();
+            return Newtonsoft.Json.JsonConvert.SerializeObject(employees);
+        }
+        [HttpPost]
+        public IActionResult Create(Employee employee)
+        {
+            _employeeRepo.InsertAsync(employee);
+            return Ok();
+        }
+
+        [HttpPut("{id}")]
+        public IActionResult Update(int id, Employee employee)
+        {
+            _employeeRepo.UpdateAsync(employee);
+            return Ok();
+        }
+
+        [HttpDelete("{id}")]
+        public IActionResult Delete(int id)
+        {
+            _employeeRepo.DeleteAsync(id);
+            return Ok();
+        }
+    }
+} 
+Repos/Employees/Employee.cs → Api/Repositories/Employees/Employee.cs 
+using System;
+
+namespace Api
+{
+    public class Employee
+    {
+        public int Id { get; set; }
+        public string Name { get; set; }
+    }
+}
+ 16  Repos/Employees/EmployeeRepository.cs → ...ositories/Employees/EmployeeRepository.cs 
+@@ -1,19 +1,20 @@
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Linq;
+using System.Threading.Tasks;
+using Dapper;
+using DataAccessLayer;
+
+namespace Api
+{
+    public class EmployeeRepository : SqlRepository<Employee>, IEmployeeRepository
+    {
+        public EmployeeRepository(string connectionString) : base(connectionString) { }
+
+        public override async void DeleteAsync(int id)
+        {
+            using (var conn = GetOpenConnection())
+            {
+                var sql = "DELETE FROM Employee WHERE Id = @Id";
+                var parameters = new DynamicParameters();
+                parameters.Add("@Id", id, System.Data.DbType.Int32);
+                await conn.QueryFirstOrDefaultAsync<Employee>(sql, parameters);
+            }
+        }
+		
+		
+        public override async Task<IEnumerable<Employee>> GetAllAsync()
+        {
+            using (var conn = GetOpenConnection())
+            {
+                var sql = "SELECT * FROM Employee";
+                return await conn.QueryAsync<Employee>(sql);
+            }
+        }
+
+        public override async Task<Employee> FindAsync(int id)
+        {
+            using (var conn = GetOpenConnection())
+            {
+                var sql = "SELECT * FROM Employee WHERE Id = @Id";
+                var parameters = new DynamicParameters();
+                parameters.Add("@Id", id, System.Data.DbType.Int32);
+                return await conn.QueryFirstOrDefaultAsync<Employee>(sql, parameters);
+            }
+        }
+		
+		
+        public override async void InsertAsync(Employee entity)
+        {
+            using (var conn = GetOpenConnection())
+            {
+                var sql = "INSERT INTO Employee(Name) "
+                    + "VALUES(@Name)";
+					
+					
+                var parameters = new DynamicParameters();
+                parameters.Add("@Name", entity.Name, System.Data.DbType.String);
+				
+                await conn.QueryAsync(sql, parameters);
+            }
+        }
+
+        public override async void UpdateAsync(Employee entityToUpdate)
+        {
+            
+			using (var conn = GetOpenConnection())
+            {
+			
+                var existingEntity = await FindAsync(entityToUpdate.Id);
+
+                var sql = "UPDATE Employee "
+                    + "SET ";
+					
+					
+                var parameters = new DynamicParameters();
+                if (existingEntity.Name != entityToUpdate.Name)
+                {
+                    sql += "Name=@Name,";
+                    parameters.Add("@Name", entityToUpdate.Name, DbType.String);
+                }
+				
+                sql = sql.TrimEnd(',');
+				
+				
+                sql += " WHERE Id=@Id";
+                parameters.Add("@Id", entityToUpdate.Id, DbType.Int32);
+				
+				
+                await conn.QueryAsync(sql, parameters);
+            }
+        }
+
+        public Task<bool> MyCustomRepositoryMethodExampleAsync()
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
+
+Api/Repositories/Employees/IEmployeeRepository.cs 
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
+using DataAccessLayer;
+
+namespace Api
+{
+    public interface IEmployeeRepository : IGenericRepository<Employee>
+    {
+        Task<bool> MyCustomRepositoryMethodExampleAsync();
+    }
+}
+
+Api/Startup.cs 
+using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.HttpsPolicy;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+namespace Api
+{
+    public class Startup
+    {
+        public Startup(IConfiguration configuration)
+        {
+            Configuration = configuration;
+        }
+		
+		
+        public IConfiguration Configuration { get; }
+        // This method gets called by the runtime. Use this method to add services to the container.
+        public void ConfigureServices(IServiceCollection services)
+        {
+            services.AddTransient<IEmployeeRepository>(x => new EmployeeRepository(Configuration.GetConnectionString("Default")));
+            services.AddMvc().SetCompatibilityVersion(CompatibilityVersion.Version_2_1);
+        }
+        // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env)
+        {
+            if (env.IsDevelopment())
+            {
+                app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseHsts();
+            }
+            
+			
+			app.UseHttpsRedirection();
+            app.UseMvc();
+        }
+    }
+}
+Repos/Repos.csproj → DataAccessLayer/DataAccessLayer.csproj 
+
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+  
+  
+
+  <ItemGroup>
+    <PackageReference Include="Dapper" Version="1.60.6" />
+  </ItemGroup>
+
+</Project>
+
+Repos/DbConnectionFactory.cs → DataAccessLayer/DbConnectionFactory.cs 
+using System;
+using System.Collections.Generic;
+using System.Data;
+using System.Data.SqlClient;
+using System.Text;
+
+namespace DataAccessLayer
+{
+    class DbConnectionFactory
+    {
+        public static IDbConnection GetDbConnection(EDbConnectionTypes dbType, string connectionString)
+        {
+            IDbConnection connection = null;
+
+            switch (dbType)
+            {
+                case EDbConnectionTypes.SQL:
+                    connection = new SqlConnection(connectionString);
+                    break;
+                case EDbConnectionTypes.XML:
+                    // TODO: Implement XML Connection (path name)
+                    break;
+                case EDbConnectionTypes.DOCUMENT:
+                    break;
+                default:
+                    connection = null;
+                    break;
+            }
+			
+			
+            connection.Open();
+            return connection;
+        }
+    }
+
+    public enum EDbConnectionTypes
+    {
+        SQL,
+        DOCUMENT,
+        XML
+    }
+}
+
+DataAccessLayer/DocumentRepository.cs 
+using Dapper;
+using System.Collections.Generic;
+using System.Data;
+using System.Threading.Tasks;
+
+namespace DataAccessLayer
+{
+    /// <summary>
+    /// The concrete implementation of a Document repository
+    /// </summary>
+    /// <typeparam name="TEntity"></typeparam>
+    public abstract class DocumentRepository<TEntity> : IGenericRepository<TEntity>
+        where TEntity : class
+    {
+        private string _connectionString;
+        private EDbConnectionTypes _dbType;
+
+        public DocumentRepository(string connectionString)
+        {
+            _dbType = EDbConnectionTypes.DOCUMENT;
+            _connectionString = connectionString;
+        }
+
+        public IDbConnection GetOpenConnection()
+        {
+            return DbConnectionFactory.GetDbConnection(_dbType, _connectionString);
+        }
+
+        public abstract void DeleteAsync(int id);
+        public abstract Task<IEnumerable<TEntity>> GetAllAsync();
+        public abstract Task<TEntity> FindAsync(int id);
+        public abstract void InsertAsync(TEntity entity);
+        public abstract void UpdateAsync(TEntity entityToUpdate);
+    }
+}
+
+Repos/IGenericRepository.cs → DataAccessLayer/IGenericRepository.cs 
+using Dapper;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace DataAccessLayer
+{
+    public interface IGenericRepository<TEntity>
+    {
+        Task<IEnumerable<TEntity>> GetAllAsync();
+        Task<TEntity> FindAsync(int id);
+        void InsertAsync(TEntity entity);
+        void DeleteAsync(int id);
+        void UpdateAsync(TEntity entityToUpdate);
+    }
+}
+
+Repos/SqlRepository.cs → DataAccessLayer/SqlRepository.cs 
+using Dapper;
+using System.Collections.Generic;
+using System.Data;
+using System.Threading.Tasks;
+
+namespace DataAccessLayer
+{
+    /// <summary>
+    /// The concrete implementation of a SQL repository
+    /// </summary>
+    /// <typeparam name="TEntity"></typeparam>
+    public abstract class SqlRepository<TEntity> : IGenericRepository<TEntity>
+        where TEntity : class
+    {
+        private string _connectionString;
+        private EDbConnectionTypes _dbType;
+
+        public SqlRepository(string connectionString)
+        {
+            __dbType = EDbConnectionTypes.SQL;
+            _connectionString = connectionString;
+        }
+
+        public IDbConnection GetOpenConnection()
+        {
+            return DbConnectionFactory.GetDbConnection(_dbType, _connectionString);
+        }
+
+        public abstract void DeleteAsync(int id);
+        public abstract Task<IEnumerable<TEntity>> GetAllAsync();
+        public abstract Task<TEntity> FindAsync(int id);
+        public abstract void InsertAsync(TEntity entity);
+        public abstract void UpdateAsync(TEntity entityToUpdate);
+    }
+}
+
+DataAccessLayer/XmlRepository.cs 
+using Dapper;
+using System.Collections.Generic;
+using System.Data;
+using System.Threading.Tasks;
+
+namespace DataAccessLayer
+{
+    /// <summary>
+    /// The concrete implementation of an XML repository
+    /// </summary>
+    /// <typeparam name="TEntity"></typeparam>
+    public abstract class XmlRepository<TEntity> : IGenericRepository<TEntity>
+        where TEntity : class
+    {
+        private string _connectionString;
+        private EDbConnectionTypes _dbType;
+
+        public XmlRepository(string filePath)
+        {
+            _dbType = EDbConnectionTypes.XML;
+            _connectionString = filePath;
+        }
+
+        public IDbConnection GetOpenConnection()
+        {
+            return DbConnectionFactory.GetDbConnection(_dbType, _connectionString);
+        }
+
+        public abstract void DeleteAsync(int id);
+        public abstract Task<IEnumerable<TEntity>> GetAllAsync();
+        public abstract Task<TEntity> FindAsync(int id);
+        public abstract void InsertAsync(TEntity entity);
+        public abstract void UpdateAsync(TEntity entityToUpdate);
+    }
+}
