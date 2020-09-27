@@ -1,0 +1,8 @@
+//Enables server to detect XSRF-TOKEN from Angular application as the anti-forgery token value by adding modifying Startup class, ConfigureServices method.
+public void ConfigureServices(IServiceCollection services)
+{
+    services.AddAntiforgery(options => options.HeaderName = "X-XSRF-TOKEN");
+    services.AddDbContext<BooksApiDbContext>(options => options.UseInMemoryDatabase("BooksDb"));
+    services.AddMvc()
+        .AddJsonOptions(options => options.SerializerSettings.ContractResolver = new DefaultContractResolver());
+}
