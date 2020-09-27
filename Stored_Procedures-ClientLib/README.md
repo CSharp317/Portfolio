@@ -1,0 +1,2 @@
+# StoredProcedures_LibraryRequirement_Database-Schema
+Database optimization for a local library client that needed to optimize over all user experience while using the digital library catalog. Client requested a solution in finding data faster. My solution to this requirement was to create several stored procedures. Developed using Stored Procedures, SQL, and SSMS and deployed via Microsoft Azure SQL Database.
