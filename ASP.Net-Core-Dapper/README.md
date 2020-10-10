@@ -1,7 +1,7 @@
 # ASP.NET Core with Dapper
 
 ## Why
-The majority of Microsoft documentation pushes Entity Framework (EF) as an ORM, which provides a code first approach to development. Unfortunately, [EF has a lot of overhead as an ORM](https://github.com/StackExchange/Dapper), whereas Dapper is twice as fast. I created this project to explore what implementing a Dapper Data Access Layer would look like.
+The vast majority of Mirosoft documentation is dominated by Entity Framework (EF) as an ORM, which provides a code first approach to development. EF as an ORM brings with it enormous overhead while Docker performs twice as quickly. I created this project to explore what implementing a Dapper DAL would look like if implemented within my and my team's code-base.
 
 ## Overview
 The goal of my architecture was to encapsulate any data access specific logic in the Repository layer of the app. I used the `Employee` object as an example. `EmployeeRepository` implements an abstract class which will dictate which data source it will use. In this case, it is using SQL (`SqlRepository`), but I also stubbed out Document and XML repositories.
