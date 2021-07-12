@@ -1,0 +1,23 @@
+ Volume in drive C is OS
+ Volume Serial Number is AA02-B83B
+
+ Directory of C:\Users\katep\OneDrive\Documents\GitHub\tetris
+
+07/12/2021  02:11 PM    <DIR>          .
+07/12/2021  02:11 PM    <DIR>          ..
+07/12/2021  01:49 PM    <DIR>          backend
+07/12/2021  02:11 PM                 0 deleteme.txt
+07/12/2021  01:49 PM             3,686 editprofile.php
+07/12/2021  01:49 PM             1,076 forms_check.js
+07/12/2021  01:49 PM             2,346 game-type.php
+07/12/2021  01:49 PM            17,852 game.js
+07/12/2021  01:49 PM             5,426 game.php
+07/12/2021  01:49 PM             1,460 jumps.js
+07/12/2021  01:49 PM             1,200 login.php
+07/12/2021  01:49 PM               316 logout.php
+07/12/2021  01:49 PM             3,496 ranking.php
+07/12/2021  01:49 PM                56 README.md
+07/12/2021  01:49 PM             2,618 register.php
+07/12/2021  01:49 PM               664 verifylogin.php
+              13 File(s)         40,196 bytes
+               3 Dir(s)  306,285,768,704 bytes free
