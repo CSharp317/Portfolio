@@ -1,0 +1,188 @@
+CREATE DATABASE db_LibrarySystem; 
+
+USE db_LibrarySystem 
+
+DROP TABLE tbl_librarybranch 
+CREATE TABLE tbl_librarybranch (
+		branch_id INT PRIMARY KEY NOT NULL IDENTITY (5000,1),
+		branch_name VARCHAR(50) NOT NULL,
+		branch_address VARCHAR(50) NOT NULL
+);
+
+INSERT INTO tbl_librarybranch
+		(branch_name, branch_address)
+		VALUES 
+		('Houghton', '128 Abbott Dr'),
+		('Central', '5294 Hill Pk'),
+		('Pike', '3492 Seymour Ln'),
+		('Sharpstown', '418 Moore St')
+
+;
+SELECT * FROM tbl_librarybranch;
+SELECT * FROM tbl_bookcopies;
+DROP PROCEDURE dbo.uspGetCopiesRecord 
+CREATE PROCEDURE dbo.uspGetCopiesRecord  @bookcopies_title nvarchar(90) = NULL, @copies_branchid nvarchar(60) = NULL, @bookcopies_count nvarchar(30) = NULL,  @branch_name nvarchar(30) = NULL
+AS
+BEGIN
+	SELECT a1.bookcopies_title, a1.copies_branchid, a1.bookcopies_count, a2.branch_name
+	FROM tbl_bookcopies a1 INNER JOIN tbl_librarybranch a2 on a1.copies_branchid=a2.branch_id
+	WHERE bookcopies_title = ISNULL(@bookcopies_title,bookcopies_title)
+	AND branch_name LIKE '%' + ISNULL(@branch_name, branch_name) + '%'
+END
+DROP PROCEDURE dbo.uspGetCopiesRecord 
+	EXEC dbo.uspGetCopiesRecord @bookcopies_title = 'The Lost Tribe', @branch_name = 'Sharpstown'
+
+
+
+	EXEC dbo.uspGetRecords @FirstName = 'Rob'
+	EXEC dbo.uspGetRecords @LastName = 'Adams'
+	EXEC dbo.uspGetRecords @MiddleName = 'J'
+
+CREATE TABLE tbl_book (
+		book_id INT PRIMARY KEY NOT NULL IDENTITY (1,1),
+		book_title VARCHAR(50) NOT NULL,
+		book_publisher VARCHAR(50) NOT NULL
+);
+
+INSERT INTO tbl_book
+		(book_title, book_publisher)
+		VALUES 
+		(50003,'The Lost Tribe', 'pub8'),
+		('title1', 'pub1'),
+		('title2', 'pub2'),
+		('title3', 'pub3'),
+		('title4', 'pub1'),
+		('title5', 'pub5'),
+		('title6', 'pub6'),
+		('title7', 'pub3'),
+		('The Lost Tribe', 'pub8'),
+		('title9', 'pub9'),
+		('title10', 'pub5'),
+		('title11', 'pub11'),
+		('title12', 'pub3'),
+		('title13', 'pub2'),
+		('title14', 'pub5'),
+		('title15', 'pub15'),
+		('title16', 'pub3'),
+		('title17', 'pub5'),
+		('title18', 'pub2'),
+		('title19', 'pub6'),
+		('title20', 'pub20')
+
+;
+DROP TABLE tbl_bookauthor;
+SELECT * FROM tbl_book;
+CREATE TABLE tbl_bookauthor (
+		bookauthor_id INT PRIMARY KEY NOT NULL IDENTITY (1,1),
+		author_name VARCHAR(50) NOT NULL,
+		book_name VARCHAR(50) NOT NULL
+);
+INSERT INTO tbl_bookauthor
+		(author_name, book_name  )
+		VALUES 
+		('author1','Title 1'),
+		('author2', 'Title 2'),
+		('author3', 'Title 3'),
+		('author 4', 'The Lost Tribe'),
+		('Stephen King', 'Title 9'),
+		('Stephen King', 'Title 10'),
+		('author7', 'Title 7'),
+		('author8', 'Title 8'),
+		('author9', 'Title 9'),
+		('author10', 'Title 19'),
+		('author11', 'Title 20')
+
+;
+SELECT * FROM tbl_bookcopies;
+	CREATE TABLE tbl_bookcopies (
+	    bookcopies_id INT PRIMARY KEY NOT NULL IDENTITY (1,1),
+		copies_bookid VARCHAR(50) NOT NULL,
+		copies_branchid VARCHAR(50) NOT NULL,
+		bookcopies_title VARCHAR(50) NOT NULL
+);
+DROP TABLE tbl_bookcopies
+	SELECT * FROM tbl_bookcopies;
+	INSERT INTO tbl_bookcopies
+		(bookcopies_title, copies_bookid, copies_branchid)
+		VALUES 
+		('The Lost Tribe', 8, 5000),
+		('Title 6', 5, 5000),
+		('Title 3', 4, 5000),
+		('Title 8', 9, 5000),
+		('Title 15', 16, 5000),
+		('Title 17', 18, 5000),
+		('Title 18', 19, 5000),
+		('Title 19', 20, 5000),
+		('Title 20', 21, 5000),
+		('Title 14', 15, 5000),
+		('The Lost Tribe', 8, 5001),
+		('Title 1', 2, 5001),
+		('Title 6', 7, 5001),
+		('Title 3', 4, 5001),
+		('Title 9', 5, 5001),
+		('Title 10', 6, 5001),
+		('Title 17', 18, 5001),
+		('Title 18', 19, 5001),
+		('Title 19', 20, 5001),
+		('Title 20', 21, 5001),
+		('Title 14', 15, 5001),
+		('Title 2', 3, 5002),
+		('The Lost Tribe', 8, 5002),
+		('Title 6', 7, 5002),
+		('Title 3', 4, 5002),
+		('Title 8', 9, 5002),
+		('Title 15', 16, 5002),
+		('Title 17', 18, 5002),
+		('Title 18', 19, 5002),
+		('Title 19', 20, 5002),
+		('Title 20', 21, 5002),
+		('Title 14', 15, 5002),
+		('Title 2', 3, 5003),
+		('Title 1', 2, 5003),
+		('Title 6', 7, 5003),
+		('Title 3', 4, 5003),
+		('The Lost Tribe', 8, 5003),
+		('Title 15', 16, 5003),
+		('Title 17', 18, 5003),
+		('Title 18', 19, 5003),
+		('Title 19', 20, 5003),
+		('Title 20', 21, 5003),
+		('The Lost Tribe', 8, 5003)
+	;
+
+SELECT a1.book_title, a1.book_publisher, a2.bookcopies_count
+	FROM tbl_book a1 INNER JOIN tbl_bookcopies a2 on a1.book_id=a2.book_id,
+	INNER JOIN tbl_libraybranch a3 tbl_bookcopies a2 on a3.branch_id=a2.book_id
+	WHERE a1.book_title = ISNULL(a1.book_title,book_title)
+;
+
+('Title 2', 2, 5001, 2),
+		(4, 5001, 2),
+		(5, 5001, 2),
+		(7, 5001, 2),
+		(9, 5001, 2),
+		(10, 5001, 2),
+		(18, 5001, 2),
+		(8, 5001, 2),
+		(15, 5001, 2),
+		(17, 5001, 2),
+		(8, 5002, 2),
+		(15, 5002, 2),
+		(17, 5002, 2),
+		(18, 5002, 2),
+		(19, 5002, 2),
+		(20, 5002, 2),
+		(14, 5002, 2),
+		(2, 5002, 2),
+		(7, 5002, 2),
+		(16, 5002, 2),
+		(8, 5003, 2),
+		(15, 5003, 2),
+		(17, 5003, 2),
+		(20, 5003, 2),
+		(19, 5003, 2),
+		(9, 5003, 2),
+		(3, 5003, 2),
+		(2, 5003, 2),
+		(7, 5003, 2),
+		(14, 5003, 2)
