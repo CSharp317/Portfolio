@@ -1,0 +1,10 @@
+BEGIN TRANSACTION; 
+BEGIN TRY 
+     INSERT dbo.Customer (CustomerName, City)
+	     Values (N'Bill Smith', NULL);
+	COMMIT TRANSACTION;
+END TRY	
+BEGIN CATCH
+		ROLLBACK TRANSACTION;
+		SELECT ERROR_NUMBER() AS 'Error Number';
+END CATCH	
