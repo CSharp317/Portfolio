@@ -1,0 +1,1213 @@
+using Pulzonic.Multipartial;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Web.Mvc;
+using VAPARS.BLL;
+using VAPARS.Enums;
+using VAPARS.Models.BusinessLayers;
+using VAPARS.Models.DataModels;
+using VAPARS.Models.DbContext;
+using VAPARS.Models.DbEdmx;
+using VAPARS.Models.Services;
+using VAPARS.Models.UserAuthorization;
+using VAPARS.Models.ViewModels;
+
+namespace VAPARS.Controllers
+{
+    [RequireHttps]
+    [ValidRequestException]
+    [PageAssetFilter()]
+    public class ReviewController : Controller
+    {
+        /// <summary>
+        /// Page assets pass through from Authorization filter
+        /// that includes UserCache and Permission Flag objects.
+        /// Requires that each controller/method contains:
+        /// with Securables
+        /// -   [AuthorizationFilter(SecurableEnum=?)]
+        /// with Assets only
+        /// -   [AuthorizationFilter(AssetsOnly=true)]
+        /// </summary>
+        public PageAssets Asset => HttpContext.Items["pagedata"] as PageAssets;
+
+
+
+
+        // GET: Review
+        /// <summary>
+        ///  Default landing page for voucher review.
+        ///  Required page data are loaded via ajax request
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult Index()
+        {
+            var model = new ReviewViewModels
+            {
+                UserData = Asset.User,
+                LogStreamers = new VoucherService().GetLogStreamer("Review", Asset.User.Domain)
+            };
+
+            return View(model);
+        }
+        /// <summary>
+        /// Claim voucher from available voucher listings
+        /// </summary>
+        /// <param name="voucherId"></param>
+        /// <returns></returns>
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ClaimVoucher(string voucherId)
+        {
+            if (!string.IsNullOrEmpty(voucherId))
+            {
+                VoucherAssignmentService.ClaimVoucher(voucherId.IntParse(), Asset);
+            }
+
+            return null;
+        }
+        /// <summary>
+        /// Release voucher from users review listings
+        /// </summary>
+        /// <param name="voucherId"></param>
+        /// <returns></returns>
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ReleaseVoucher(string voucherId)
+        {
+            if (!string.IsNullOrEmpty(voucherId))
+            {
+                VoucherAssignmentService.ReleaseVoucher(voucherId.IntParse(), Asset);
+            }
+
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ReleaseAllVouchers()
+        {
+            VoucherAssignmentService.ReleaseAllClaimedVouchersBySQL(Asset, StageType.Review);
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ReviewVoucher(string voucherId)
+        {
+
+            if (!string.IsNullOrEmpty(voucherId))
+            {
+                // retrieve voucher services
+                var voucher = new VoucherService { VoucherId = voucherId.IntParse() };
+                // retrieve voucher data
+                var voucherData = voucher.GetVoucherData;
+                // retrieve patient data                
+                // call sproc to retrieve voucher patient details --
+                var patientData = new VoucherService().GetVoucherPatientDetails(voucherData.PatientId, string.Empty, voucherData.Id);
+                var voucherDetails = new VoucherService().GetVoucherLoadDetails(voucherId.IntParse(), patientData.PatientId, voucherData.PatientStationId);
+
+                // bind voucher data to view models
+                var models = new ReviewViewModels
+                {
+                    SelectVoucherReason = voucher.GetVoucherReasonSelectList,
+                    SelectVoucherSource = voucher.GetVoucherRefundSourceList,
+                    //VoucherBills = new BillService().GetVoucherBillViewResults(voucherId.IntParse()), // call sproc to retrive voucher bills and details
+                    PatientDetailsResults = patientData,
+                    VoucherCorrectionsResults = new VoucherCorrectionService().GetVoucherCorrectionsSql(voucherId.IntParse()),
+                    VoucherDataModel = new VoucherDataModel
+                    {
+                        PatientId = patientData.PatientId,
+                        VoucherId = voucherId.IntParse(),
+                        Documentation = voucherDetails.DefaultDoc,
+                        PaidHistoryDocumentation = voucherDetails.PaidHistoryDoc,
+                        FMSNumber = voucherData.FMSNumber.ToString(),
+                        VoucherNumber = voucherData.VoucherNumber.ToString(),
+                        Prefix = voucherData.Prefix,
+                        TotalFees = voucherDetails.TotalFees,
+                        TotalRefund = voucherDetails.VoucherTotal,
+                        VistaAccountNumber = voucherData.VistaAccountNumber,
+                        DebtorComments = voucherData.DeterComment,
+                        StationId = voucherDetails.StationNumber.ToString(),
+                        IsReviewed = voucherData.IsReviewed == true || voucherDetails.AssignToReviewGuid != Asset.User.Guid ? true : false,
+                        FMSCompleted = voucherData.FMSComplete,
+                        CPAC = voucherDetails.CreateByCPAC,
+                        Age = voucherDetails.Age,
+                        IsValidReviewer = voucherDetails.AssignToReviewGuid == Asset.User.Guid && voucherDetails.FinalizedByGuid != Asset.User.Guid ? true : false,  // cannot approve voucher unless the voucher it's assigned to the authenticated user
+                        Reviewer = voucherDetails.Reviewer,
+                        SSNHash = patientData.SSNHash
+
+                    },
+                    RSCBillSummary = new BillService().GetRSCDetails(voucherId.IntParse()),
+                    VoucherLifeCycle = LifecycleService.GetVoucherLifecycleResults(voucherId.IntParse())
+                };
+
+
+
+                //update voucher assignment being viewed by reviewer
+                //disables the ability for issues to release voucher from review state
+                VoucherAssignmentService.UpdateLastViewed(voucherId.IntParse());
+
+                var results = new MultipartialResult(this);
+                results.AddView("_VoucherReviewDetails", "reviewContentDiv", models);
+                return results;
+
+            }
+
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        public ActionResult GetVoucherBills(string voucherId)
+        {
+            if (!string.IsNullOrEmpty(voucherId))
+            {
+                var model = new ReviewViewModels
+                {
+                    //VoucherBills = new BillService().GetBillViewResultsSql(voucherId.IntParse())
+                    VoucherBills = new BillService().GetVoucherBillViewResults(voucherId.IntParse()),
+                    VoucherCorrectionsResults = new VoucherCorrectionService().GetVoucherCorrectionsSql(voucherId.IntParse())
+                };
+                return PartialView("_Bills", model);
+            }
+
+            // return empty if voucher Id is null or emptry string
+            return null;
+        }
+
+        /// <summary>
+        /// Claim all available vouchers in the specified station
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ViewAllVouchers()
+        {
+            var models = new ReviewViewModels
+            {
+            };
+
+            var results = new MultipartialResult(this);
+            results.AddView("_PendingVouchers", "reviewContentDiv", models);
+            return results;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ClaimStationVouchers(string station)
+        {
+            if (!string.IsNullOrEmpty(station))
+            {
+                new VoucherService().UpdateReviewAssignments(Asset, "claimAllByStation", station.IntParse(), "");
+            }
+
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ClaimIssuerVouchers(string issuerGuid)
+        {
+            if (!string.IsNullOrEmpty(issuerGuid))
+            {
+                new VoucherService().UpdateReviewAssignments(Asset, "claimAllByIssuer", 0, issuerGuid);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Claim all available vouchers to review
+        /// where assignedTo is null
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ClaimAllVouchers()
+        {
+            // claim all
+            new VoucherService().UpdateReviewAssignments(Asset, "claimAll", 0, "");
+
+
+            return null;
+
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        public ActionResult BillDetailCorrection(string voucherId, string notes, string billId, string billNo)
+        {
+            if (!string.IsNullOrEmpty(voucherId) && !string.IsNullOrEmpty(billId))
+            {
+
+                var reviewer = new VoucherService().GetAssignToReview(voucherId.IntParse(), "assignToReview");
+
+                if (reviewer.ReviewerGuid != Asset.User.Guid)
+                {
+                    var note = "";
+                    if (reviewer.ReviewerGuid != null)
+                    {
+                        note = $"This voucher is assigned to {reviewer.Reviewer}";
+                    }
+                    else
+                    {
+                        note = "This voucher is not assigned to you";
+                    }
+
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                if (reviewer.FinalizedByGuid == Asset.User.Guid)
+                {
+                    var note = $"You cannot review the voucher you've issued!";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+
+                }
+
+                // retrieve voucher services
+                var voucher = new VoucherService { VoucherId = voucherId.IntParse() };
+                // retrieve voucher data
+                var voucherData = voucher.GetVoucherData;
+                if (!voucherData.IsSubmitted)
+                {
+                    var note = $"The voucher was released by the issuer.";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                // execute the code block below only if the authenticated user is the reviewer
+
+
+                VoucherCorrectionService.VoucherCorrectionBills(voucherId.IntParse(),
+                    CorrectionType.Bill, billId.IntParse(), $"{billNo} - {notes}", Lifecycle.ReviewReady);
+
+
+                var patientData = new VoucherService().GetVoucherPatientDetails(voucherData.PatientId, string.Empty, voucherData.Id);
+                // bind voucher data to view models
+                var models = new ReviewViewModels
+                {
+                    VoucherBills = new BillService().GetVoucherBillViewResults(voucherId.IntParse()), // call sproc to retrive voucher bills and details     
+                    VoucherCorrectionsResults = new VoucherCorrectionService().GetVoucherCorrectionsSql(voucherId.IntParse()),
+                    VoucherDataModel = new VoucherDataModel
+                    {
+                        IsReviewed = voucherData.IsReviewed == true || reviewer.ReviewerGuid != Asset.User.Guid ? true : false,
+                        FMSCompleted = voucherData.FMSComplete,
+                        VoucherId = voucherId.IntParse(),
+                        SSNHash = patientData.SSNHash,
+                        IsValidReviewer = reviewer.ReviewerGuid == Asset.User.Guid && reviewer.FinalizedByGuid != Asset.User.Guid ? true : false,  // cannot approve voucher unless the voucher it's assigned to the authenticated user
+                        Reviewer = reviewer.Reviewer
+
+                    },
+                };
+
+                var results = new MultipartialResult(this);
+                results.AddView("_Bills", "bills", models);
+                results.AddView("_Corrections", "voucherCorrectionsDiv", models);
+                results.AddView("_ReviewActions", "reviewActions", models);
+                return results;
+
+            }
+
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        public ActionResult VoucherCorrections(string voucherId, string notes, string type)
+        {
+            if (!string.IsNullOrEmpty(voucherId))
+            {
+
+
+                var reviewer = new VoucherService().GetAssignToReview(voucherId.IntParse(), "assignToReview");
+
+                if (reviewer.ReviewerGuid != Asset.User.Guid)
+                {
+                    var note = "";
+                    if (reviewer.ReviewerGuid != null)
+                    {
+                        note = $"This voucher is assigned to {reviewer.Reviewer}";
+                    }
+                    else
+                    {
+                        note = "This voucher is not assigned to you";
+                    }
+
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                if (reviewer.FinalizedByGuid == Asset.User.Guid)
+                {
+                    var note = $"You cannot review the voucher you've issued!";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                // retrieve voucher services
+                var voucher = new VoucherService { VoucherId = voucherId.IntParse() };
+                // retrieve voucher data
+                var voucherData = voucher.GetVoucherData;
+                if (!voucherData.IsSubmitted)
+                {
+                    var note = $"The voucher was released by the issuer.";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                // execute the code block below only if the authenticated user is the reviewer
+
+                switch (type)
+                {
+                    case "patientDetails":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.PatientDetails, notes, Lifecycle.ReviewReady);
+                        break;
+                    case "voucherDetails":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.VoucherDetails, notes, Lifecycle.ReviewReady);
+                        break;
+                    case "paidHistory":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.PaidHistory, notes, Lifecycle.ReviewReady);
+                        break;
+                    case "documentation":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.Documentation, notes, Lifecycle.ReviewReady);
+                        break;
+                }
+
+
+                var voucherDetails = new VoucherService().GetVoucherLoadDetails(voucherId.IntParse(), voucherData.PatientId, voucherData.PatientStationId);
+                var patientData = new VoucherService().GetVoucherPatientDetails(voucherData.PatientId, string.Empty, voucherData.Id);
+                // bind voucher data to view models
+                var models = new ReviewViewModels
+                {
+                    VoucherCorrectionsResults = new VoucherCorrectionService().GetVoucherCorrectionsSql(voucherId.IntParse()),
+                    VoucherDataModel = new VoucherDataModel
+                    {
+                        Documentation = voucherDetails.DefaultDoc,//
+                        PaidHistoryDocumentation = voucherDetails.PaidHistoryDoc,//
+                        IsReviewed = voucherData.IsReviewed == true || reviewer.ReviewerGuid != Asset.User.Guid ? true : false,//
+                        FMSCompleted = voucherData.FMSComplete,
+                        VoucherId = voucherId.IntParse(),
+                        SSNHash = patientData.SSNHash,
+                        IsValidReviewer = reviewer.ReviewerGuid == Asset.User.Guid && reviewer.FinalizedByGuid != Asset.User.Guid ? true : false,  // cannot approve voucher unless the voucher it's assigned to the authenticated user
+                        Reviewer = reviewer.Reviewer
+                    },
+
+                };
+
+
+                var results = new MultipartialResult(this);
+                results.AddView("_VoucherDoc", "voucherDocTab", models);
+                results.AddView("_Corrections", "voucherCorrectionsDiv", models);
+                results.AddView("_ReviewActions", "reviewActions", models);
+                results.AddView("_PatientCorrectionFlag", "patientCorrectionFlag", models);
+                results.AddView("_VoucherCorrectionFlag", "voucherCorrectionFlag", models);
+                return results;
+
+
+            }
+
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult UndoCorrection(string correctionId, string voucherId)
+        {
+            if (!string.IsNullOrEmpty(correctionId))
+            {
+                var reviewer = new VoucherService().GetAssignToReview(voucherId.IntParse(), "assignToReview");
+
+                if (reviewer.ReviewerGuid != Asset.User.Guid)
+                {
+                    var note = "";
+                    if (reviewer.ReviewerGuid != null)
+                    {
+                        note = $"This voucher is assigned to {reviewer.Reviewer}";
+                    }
+                    else
+                    {
+                        note = "This voucher is not assigned to you";
+                    }
+
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                if (reviewer.FinalizedByGuid == Asset.User.Guid)
+                {
+                    var note = $"You cannot review the voucher you've issued!";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+
+                }
+
+                // retrieve voucher services
+                var voucher = new VoucherService { VoucherId = voucherId.IntParse() };
+                // retrieve voucher data
+                var voucherData = voucher.GetVoucherData;
+                if (!voucherData.IsSubmitted)
+                {
+                    var note = $"The voucher was released by the issuer.";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+
+                // execute the code block below only if the authenticated user is the reviewer
+
+                VoucherCorrectionService.VoucherUndoCorrectionRequest(correctionId.IntParse());
+
+
+
+                var voucherDetails = new VoucherService().GetVoucherLoadDetails(voucherId.IntParse(), voucherData.PatientId, voucherData.PatientStationId);
+                var patientData = new VoucherService().GetVoucherPatientDetails(voucherData.PatientId, string.Empty, voucherData.Id);
+                // bind voucher data to view models
+                var models = new ReviewViewModels
+                {
+                    VoucherBills = new BillService().GetVoucherBillViewResults(voucherId.IntParse()), // call sproc to retrive voucher bills and details 
+                    VoucherCorrectionsResults = new VoucherCorrectionService().GetVoucherCorrectionsSql(voucherId.IntParse()),
+                    VoucherDataModel = new VoucherDataModel
+                    {
+                        Documentation = voucherDetails.DefaultDoc,//
+                        PaidHistoryDocumentation = voucherDetails.PaidHistoryDoc,//
+                        IsReviewed = voucherData.IsReviewed == true || reviewer.ReviewerGuid != Asset.User.Guid ? true : false,//
+                        FMSCompleted = voucherData.FMSComplete,
+                        VoucherId = voucherId.IntParse(),
+                        SSNHash = patientData.SSNHash,
+                        IsValidReviewer = reviewer.ReviewerGuid == Asset.User.Guid && reviewer.FinalizedByGuid != Asset.User.Guid ? true : false,  // cannot approve voucher unless the voucher it's assigned to the authenticated user
+                        Reviewer = reviewer.Reviewer
+                    },
+
+                };
+
+
+                var results = new MultipartialResult(this);
+                results.AddView("_Bills", "bills", models);
+                results.AddView("_VoucherDoc", "voucherDocTab", models);
+                results.AddView("_Corrections", "voucherCorrectionsDiv", models);
+                results.AddView("_ReviewActions", "reviewActions", models);
+                results.AddView("_PatientCorrectionFlag", "patientCorrectionFlag", models);
+                results.AddView("_VoucherCorrectionFlag", "voucherCorrectionFlag", models);
+                return results;
+            }
+
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public async Task<ActionResult> DeclineVoucher(string voucherId, string nextVoucherId)
+        {
+            if (!string.IsNullOrEmpty(voucherId))
+            {
+
+                var reviewer = new VoucherService().GetAssignToReview(voucherId.IntParse(), "assignToReview");
+
+                if (reviewer.ReviewerGuid != Asset.User.Guid)
+                {
+                    var note = "";
+                    if (reviewer.ReviewerGuid != null)
+                    {
+                        note = $"This voucher is assigned to {reviewer.Reviewer}";
+                    }
+                    else
+                    {
+                        note = "This voucher is not assigned to you";
+                    }
+
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+
+                if (reviewer.FinalizedByGuid == Asset.User.Guid)
+                {
+                    var note = $"You cannot review the voucher you've issued!";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+
+                }
+
+                // initialize voucher service
+                var voucher = new VoucherService { VoucherId = voucherId.IntParse() };
+                // retrieve voucher data
+                var voucherData = voucher.GetVoucherData;
+                if (!voucherData.IsSubmitted)
+                {
+                    var note = $"The voucher was released by the issuer.";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                // execute the code block below only if the authenticated user is the reviewer
+
+
+                // update lifecyle review denied
+                LifecycleService.UpdateVoucherLifecycle(Lifecycle.ReviewDenied, voucherId.IntParse(), string.Empty, Asset);
+                // update lifecycle active correction
+                LifecycleService.UpdateVoucherLifecycle(Lifecycle.ActiveCorrection, voucherId.IntParse(), string.Empty, Asset);
+
+                voucherData.IsSubmitted = false;
+                voucher.VoucherUpdate = voucherData;
+                // log voucher 
+                // update log notes
+                new PatientLogResults
+                {
+                    PatientId = voucherData.PatientId,
+                    Message = $"Voucher Returned for corrections:  #{voucherData.VoucherNumber} Details",
+                    Type = PatientLogType.Voucher
+                }.AddPatientLogItem();
+
+                // Retrieve corrections
+                var voucherCorrections = new VoucherCorrectionService { VoucherId = voucherId.IntParse() }.GetVoucherCorrections;
+                // Retrieve Voucher Assignment
+                var assigned = new VoucherAssignmentService { VoucherId = voucherId.IntParse() }.GetSetVoucherAssignment;
+                var userData = Models.DomainUserService.UserCache.GetUserCacheByGuid(assigned.LastFinalizedByGuid);
+
+                // EmailNotification
+                if (userData != null)
+                {
+                    await EmailService.SendEmail(new EmailDistribution
+                    {
+                        EmailTo = userData.Email,
+                        EmailSubject = $"Voucher Decline : {voucherData.VoucherNumber}",
+                        EmailTemplate = EmailTemplate.VoucherDeniedTemplate,
+                        Amount = voucherData.VoucherTotal.ToString("C"),
+                        VoucherNumber = voucherData.VoucherNumber.ToString(),
+                        VoucherId = voucherId,
+                        UserFullName = $"{userData.FirstName} {userData.LastName}",
+                        Corrections = $"{voucherCorrections.Count(m => !m.Corrected)}",
+                        CallBack = EmailCallBack.LoadVoucher
+                    });
+                }
+
+
+
+                if (!string.IsNullOrEmpty(nextVoucherId))
+                {
+                    return ReviewVoucher(nextVoucherId);
+                }
+                else
+                {
+                    return ViewAllVouchers();
+                }
+
+            }
+
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public async Task<ActionResult> DeclineVoucherWithGeneralComments(string voucherId, string notes, string type, string nextVoucherId)
+        {
+            if (!string.IsNullOrEmpty(voucherId))
+            {
+                var reviewer = new VoucherService().GetAssignToReview(voucherId.IntParse(), "assignToReview");
+
+                if (reviewer.ReviewerGuid != Asset.User.Guid)
+                {
+                    var note = "";
+                    if (reviewer.ReviewerGuid != null)
+                    {
+                        note = $"This voucher is assigned to {reviewer.Reviewer}";
+                    }
+                    else
+                    {
+                        note = "This voucher is not assigned to you";
+                    }
+
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                if (reviewer.FinalizedByGuid == Asset.User.Guid)
+                {
+                    var note = $"You cannot review the voucher you've issued!";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                // retrieve voucher services
+                var voucher = new VoucherService { VoucherId = voucherId.IntParse() };
+                // retrieve voucher data
+                var voucherData = voucher.GetVoucherData;
+                if (!voucherData.IsSubmitted)
+                {
+                    var note = $"The voucher was released by the issuer.";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                // execute the code block below only if the authenticated user is the reviewer               
+
+                switch (type)
+                {
+                    case "patientDetails":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.PatientDetails, notes, Lifecycle.ReviewReady);
+                        break;
+                    case "voucherDetails":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.VoucherDetails, notes, Lifecycle.ReviewReady);
+                        break;
+                    case "paidHistory":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.PaidHistory, notes, Lifecycle.ReviewReady);
+                        break;
+                    case "documentation":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.Documentation, notes, Lifecycle.ReviewReady);
+                        break;
+                    case "generalDecline":
+                        VoucherCorrectionService.VoucherCorrectionDetails(voucherId.IntParse(), CorrectionType.GeneralDecline, notes, Lifecycle.ReviewReady);
+                        break;
+                }
+
+                // update lifecyle review denied
+                LifecycleService.UpdateVoucherLifecycle(Lifecycle.ReviewDenied, voucherId.IntParse(), string.Empty, Asset);
+                // update lifecycle active correction
+                LifecycleService.UpdateVoucherLifecycle(Lifecycle.ActiveCorrection, voucherId.IntParse(), string.Empty, Asset);
+
+                voucherData.IsSubmitted = false;
+                voucher.VoucherUpdate = voucherData;
+                // log voucher 
+                // update log notes
+                new PatientLogResults
+                {
+                    PatientId = voucherData.PatientId,
+                    Message = $"Voucher Returned for corrections:  #{voucherData.VoucherNumber} Details",
+                    Type = PatientLogType.Voucher
+                }.AddPatientLogItem();
+
+                // Retrieve corrections
+                var voucherCorrections = new VoucherCorrectionService { VoucherId = voucherId.IntParse() }.GetVoucherCorrections;
+                // Retrieve Voucher Assignment
+                var assigned = new VoucherAssignmentService { VoucherId = voucherId.IntParse() }.GetSetVoucherAssignment;
+                var userData = Models.DomainUserService.UserCache.GetUserCacheByGuid(assigned.LastFinalizedByGuid);
+
+                // EmailNotification
+                if (userData != null)
+                {
+                    await EmailService.SendEmail(new EmailDistribution
+                    {
+                        EmailTo = userData.Email,
+                        EmailSubject = $"Voucher Decline : {voucherData.VoucherNumber}",
+                        EmailTemplate = EmailTemplate.VoucherDeniedTemplate,
+                        Amount = voucherData.VoucherTotal.ToString("C"),
+                        VoucherNumber = voucherData.VoucherNumber.ToString(),
+                        VoucherId = voucherId,
+                        UserFullName = $"{userData.FirstName} {userData.LastName}",
+                        Corrections = $"{voucherCorrections.Count(m => !m.Corrected)}",
+                        CallBack = EmailCallBack.LoadVoucher
+                    });
+                }
+
+                //var voucherDetails = new VoucherService().GetVoucherLoadDetails(voucherId.IntParse(), voucherData.PatientId, voucherData.PatientStationId);
+                //var patientData = new VoucherService().GetVoucherPatientDetails(voucherData.PatientId, string.Empty, voucherData.Id);
+                //// bind voucher data to view models
+                //var models = new ReviewViewModels
+                //{
+                //    VoucherCorrectionsResults = new VoucherCorrectionService().GetVoucherCorrectionsSql(voucherId.IntParse()),
+                //    VoucherDataModel = new VoucherDataModel
+                //    {
+                //        Documentation = voucherDetails.DefaultDoc,//
+                //        PaidHistoryDocumentation = voucherDetails.PaidHistoryDoc,//
+                //        IsReviewed = voucherData.IsReviewed == true || reviewer.ReviewerGuid != Asset.User.Guid ? true : false,//
+                //        FMSCompleted = voucherData.FMSComplete,
+                //        VoucherId = voucherId.IntParse(),
+                //        SSNHash = patientData.SSNHash,
+                //        IsValidReviewer = reviewer.ReviewerGuid == Asset.User.Guid && reviewer.FinalizedByGuid != Asset.User.Guid ? true : false,  // cannot approve voucher unless the voucher it's assigned to the authenticated user
+                //        Reviewer = reviewer.Reviewer
+                //    },
+
+                //};
+
+
+                if (!string.IsNullOrEmpty(nextVoucherId))
+                {
+                    return ReviewVoucher(nextVoucherId);
+                }
+                else
+                {
+                    return ViewAllVouchers();
+                }
+            }
+
+            return null;
+        }
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public async Task<ActionResult> ApproveVoucher(string voucherId, string nextVoucherId)
+        {
+            if (!string.IsNullOrEmpty(voucherId))
+            {
+                var reviewer = new VoucherService().GetAssignToReview(voucherId.IntParse(), "assignToReview");
+
+                if (reviewer.ReviewerGuid != Asset.User.Guid)
+                {
+                    var note = "";
+                    if (reviewer.ReviewerGuid != null)
+                    {
+                        note = $"This voucher is assigned to {reviewer.Reviewer}";
+                    }
+                    else
+                    {
+                        note = "This voucher is not assigned to you";
+                    }
+
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+
+                if (reviewer.FinalizedByGuid == Asset.User.Guid)
+                {
+                    var note = $"You cannot review the voucher you've issued!";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+
+                }
+
+                // initialize voucher service
+                var voucher = new VoucherService { VoucherId = voucherId.IntParse() };
+                // retrieve voucher data
+                var voucherData = voucher.GetVoucherData;
+                if (!voucherData.IsSubmitted)
+                {
+                    var note = $"The voucher was released by the issuer.";
+                    return RedirectToAction("FailedMessage", "Error", new { message = note });
+                }
+
+                // execute the code block below only if the authenticated user is the reviewer
+
+                LifecycleService.UpdateVoucherLifecycle(Lifecycle.ReviewAccepted, voucherId.IntParse(), string.Empty, Asset);
+                LifecycleService.UpdateVoucherLifecycle(Lifecycle.CertifyReady, voucherId.IntParse(), string.Empty, Asset);
+
+
+                voucherData.IsReviewed = true;
+                voucher.VoucherUpdate = voucherData;
+
+                // retrive user limits
+                var maxLimit = new AppAttributeService().GetMaxAmountLimit();
+                var validAmounts = EmailBLL.GetUsersForLimitEmail(Asset.User.Domain, UserLimitTypes.Review, voucherData.VoucherTotal, maxLimit).ToList();
+                if (validAmounts.Count() > 0)
+                {
+                    foreach (var user in validAmounts)
+                    {
+                        //Email notification base on limit amount
+                        // EmailNotification
+                        await EmailService.SendEmail(new EmailDistribution
+                        {
+                            EmailTo = user.Email,
+                            EmailSubject = $"Voucher Limit Approval : {voucherData.VoucherNumber}",
+                            EmailTemplate = EmailTemplate.VoucherReviewLimitTemplate,
+                            Amount = voucherData.VoucherTotal.ToString("C"),
+                            VoucherNumber = voucherData.VoucherNumber.ToString(),
+                            VoucherId = voucherId,
+                            UserFullName = $"{user.FirstName} {user.LastName}",
+                            CallBack = EmailCallBack.LoadVoucherReview
+                        });
+                    }
+                }
+
+                // log voucher 
+                // update log notes
+                new PatientLogResults
+                {
+                    PatientId = voucherData.PatientId,
+                    Message = $"Voucher Accepted:  #{voucherData.VoucherNumber} Details.  {validAmounts.Count()} Limit Notification sent.",
+                    Type = PatientLogType.Voucher
+                }.AddPatientLogItem();
+
+
+                if (!string.IsNullOrEmpty(nextVoucherId))
+                {
+                    return ReviewVoucher(nextVoucherId);
+                }
+                else
+                {
+                    return ViewAllVouchers();
+                }
+            }
+            return null;
+        }
+
+
+        [HttpGet]
+        [AjaxOnly]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        [SSNHashingFilter]
+        public ActionResult VoidVoucher(string voucherId, string ssn)
+        {
+            if (!string.IsNullOrEmpty(voucherId) && !string.IsNullOrEmpty(ssn))
+            {
+                var model = new ReviewViewModels
+                {
+                    VoidVoucherModel = new VoidVoucherDataModel
+                    {
+                        VoucherId = voucherId.IntParse(),
+                        PatientSSN = ssn
+                    },
+                    SelectVoidReason = new VoucherService().GetVoidReasons,
+                };
+
+                var results = new MultipartialResult(this);
+                results.AddView("_VoidVoucher", "voidFormDiv", model);
+                return results;
+            }
+
+            return null;
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryTokenOnAjaxPost]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult VoidVoucher(ReviewViewModels model)
+        {
+            var results = new MultipartialResult(this);
+            model.SelectVoidReason = new VoucherService().GetVoidReasons;
+            if (!ModelState.IsValid)
+            {
+                results.AddView("_VoidVoucher", "voidFormDiv", model);
+                return results;
+            }
+
+            var reviewer = new VoucherService().GetAssignToReview(model.VoidVoucherModel.VoucherId, "assignToReview");
+
+            if (reviewer.ReviewerGuid != Asset.User.Guid)
+            {
+                var note = "";
+                if (reviewer.ReviewerGuid != null)
+                {
+                    note = $"This voucher is assigned to {reviewer.Reviewer}";
+                }
+                else
+                {
+                    note = "This voucher is not assigned to you";
+                }
+
+                return RedirectToAction("FailedMessage", "Error", new { message = note });
+            }
+
+
+            if (reviewer.FinalizedByGuid == Asset.User.Guid)
+            {
+                var note = $"You cannot review the voucher you've issued!";
+                return RedirectToAction("FailedMessage", "Error", new { message = note });
+
+            }
+
+            // execute the code block below only if the authenticated user is the reviewer
+
+
+
+            // if form data pass validation
+            // update form status to success
+            model.VoidVoucherModel.UpdateSuccess = true;
+            // update lifecycle
+            LifecycleService.UpdateVoucherLifecycle(Lifecycle.Void, model.VoidVoucherModel.VoucherId, model.VoidVoucherModel.VoidComment, Asset);
+
+            var myvouchers = VoucherSearch.GetMyVouchers(Asset.User);
+            // view next voucher or list of vouchers
+            if (myvouchers.Any())
+            {
+                return ReviewVoucher(myvouchers.First().VoucherId.ToString());
+            }
+            else
+            {
+                return ViewAllVouchers();
+            }
+
+        }
+
+        public ActionResult GetAvailableVouchers(string type)
+        {
+            var search = Request["search[value]"];
+            var draw = Request.Form.GetValues("draw").FirstOrDefault();
+            var start = Request.Form.GetValues("start").FirstOrDefault();
+            var lenght = Request.Form.GetValues("length").FirstOrDefault();
+
+
+            var sortColumn = Request.Form.GetValues("Columns[" + Request.Form.GetValues("order[0][column]").FirstOrDefault() + "][name]").FirstOrDefault();
+            var sortColumnDir = Request.Form.GetValues("order[0][dir]").FirstOrDefault();
+
+            int pageSize = lenght != null ? Convert.ToInt32(lenght) : 0;
+            int skip = start != null ? Convert.ToInt32(start) : 0;
+            int recordsTotal = 0;
+            using (var con = new CommonDb())
+            {
+                // set read uncommitted transactions at context level
+                con.VaparsViewDb.Database.ExecuteSqlCommand("SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;");
+                con.VaparsViewDb.Database.CommandTimeout = 360;
+
+                IQueryable<AvailableVoucher> results;
+
+                switch (type)
+                {
+                    case "available":
+                        results = (from a in con.VaparsViewDb.AvailableVouchers
+                                   where a.AssignToReviewGuid == null && a.LastFinalizedByGuid != Asset.User.Guid
+                                   && a.FinalizedByCPAC == Asset.User.Domain
+                                   select a);
+                        break;
+                    case "mylist":
+                        results = (from a in con.VaparsViewDb.AvailableVouchers
+                                   where a.AssignToReviewGuid == Asset.User.Guid && a.LastFinalizedByGuid != Asset.User.Guid && a.FinalizedByCPAC == Asset.User.Domain
+                                   select a);
+                        break;
+                    default:
+                        results = (from a in con.VaparsViewDb.AvailableVouchers
+                                   where a.AssignToReviewGuid != null && a.LastFinalizedByGuid != Asset.User.Guid && a.FinalizedByCPAC == Asset.User.Domain
+                                   select a);
+                        break;
+                }
+
+                var data = new List<AvailableVoucher>();
+
+                if (!string.IsNullOrEmpty(search))
+                {
+                    search = search.ToLower();
+                    results = results.Where(m => m.VoucherNumber.ToString().Contains(search) ||
+                    m.Veteran.ToLower().Contains(search) ||
+                    m.Issuer.ToLower().Contains(search) ||
+                    m.StationNumber.ToString().Contains(search));
+                }
+
+                if (!(string.IsNullOrEmpty(sortColumn) && string.IsNullOrEmpty(sortColumnDir)))
+                {
+                    switch (sortColumn)
+                    {
+                        case "VoucherNumber":
+                            if (sortColumnDir == "desc")
+                                data = results.OrderByDescending(m => m.VoucherNumber).Skip(skip).Take(pageSize).ToList();
+                            else
+                                data = results.OrderBy(m => m.VoucherNumber).Skip(skip).Take(pageSize).ToList();
+                            break;
+                        case "Age":
+                            if (sortColumnDir == "desc")
+                                data = results.OrderByDescending(m => m.Age).Skip(skip).Take(pageSize).ToList();
+                            else
+                                data = results.OrderBy(m => m.Age).Skip(skip).Take(pageSize).ToList();
+                            break;
+                        case "StationNumber":
+                            if (sortColumnDir == "desc")
+                                data = results.OrderByDescending(m => m.StationNumber).Skip(skip).Take(pageSize).ToList();
+                            else
+                                data = results.OrderBy(m => m.StationNumber).Skip(skip).Take(pageSize).ToList();
+                            break;
+                        case "VoucherTotal":
+                            if (sortColumnDir == "desc")
+                                data = results.OrderByDescending(m => m.VoucherTotal).Skip(skip).Take(pageSize).ToList();
+                            else
+                                data = results.OrderBy(m => m.VoucherTotal).Skip(skip).Take(pageSize).ToList();
+                            break;
+                        case "Veteran":
+                            if (sortColumnDir == "desc")
+                                data = results.OrderByDescending(m => m.Veteran).Skip(skip).Take(pageSize).ToList();
+                            else
+                                data = results.OrderBy(m => m.Veteran).Skip(skip).Take(pageSize).ToList();
+                            break;
+                        case "Issuer":
+                            if (sortColumnDir == "desc")
+                                data = results.OrderByDescending(m => m.Issuer).Skip(skip).Take(pageSize).ToList();
+                            else
+                                data = results.OrderBy(m => m.Issuer).Skip(skip).Take(pageSize).ToList();
+                            break;
+                        case "ClaimedBy":
+                            if (sortColumnDir == "desc")
+                                data = results.OrderByDescending(m => m.ClaimedBy).Skip(skip).Take(pageSize).ToList();
+                            else
+                                data = results.OrderBy(m => m.ClaimedBy).Skip(skip).Take(pageSize).ToList();
+                            break;
+                        default:
+                            data = results.OrderBy(m => m.VoucherNumber).Skip(skip).Take(pageSize).ToList();
+                            break;
+
+                    }
+
+                }
+                else
+                {
+                    data = results.OrderBy(m => m.VoucherNumber).Skip(skip).Take(pageSize).ToList();
+                }
+
+
+
+                recordsTotal = results.Count();
+
+                if (type == "mylist")
+                {
+                    foreach (var item in data)
+                    {
+                        item.IsReviewed = false;
+                        item.IsSubmitted = false;
+
+                        var corrections = VoucherCorrectionService.ExistingCorrections(item.Id, Lifecycle.ReviewReady);
+
+                        if (corrections.Requested)
+                        {
+                            item.IsSubmitted = true;
+                        }
+
+                        if (corrections.Reviewed)
+                        {
+                            item.IsReviewed = true;
+                        }
+
+                    }
+                }
+
+                return Json(new { draw = draw, recordsFiltered = recordsTotal, recordsTotal = recordsTotal, data = data }, JsonRequestBehavior.AllowGet);
+            }
+        }
+        /// <summary>
+        /// Url Action endpoint is dedicated to my voucher listing use only
+        /// </summary>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        public ActionResult GetMyAvailableVouchers(string type)
+        {
+            var search = Request["search[value]"];
+            var draw = Request.Form.GetValues("draw").FirstOrDefault();
+            var start = Request.Form.GetValues("start").FirstOrDefault();
+            var lenght = Request.Form.GetValues("length").FirstOrDefault();
+
+
+            var sortColumn = Request.Form.GetValues("Columns[" + Request.Form.GetValues("order[0][column]").FirstOrDefault() + "][name]").FirstOrDefault();
+            var sortColumnDir = Request.Form.GetValues("order[0][dir]").FirstOrDefault();
+
+            int pageSize = lenght != null ? Convert.ToInt32(lenght) : 0;
+            int skip = start != null ? Convert.ToInt32(start) : 0;
+            int recordsTotal = 0;
+            var results = new List<ReviewVouchers>();
+
+            switch (type)
+            {
+                case "mylist":
+                    results = new VoucherService().GetPendingReviews(Asset, "user").Assigned.ToList();
+                    break;
+            }
+
+            var data = new List<ReviewVouchers>();
+
+            if (!string.IsNullOrEmpty(search))
+            {
+                search = search.ToLower();
+                results = results.Where(m => m.VoucherNumber.ToString().Contains(search)).ToList();
+            }
+
+            if (!(string.IsNullOrEmpty(sortColumn) && string.IsNullOrEmpty(sortColumnDir)))
+            {
+                switch (sortColumn)
+                {
+                    case "VoucherNumber":
+                        if (sortColumnDir == "desc")
+                            data = results.OrderByDescending(m => m.VoucherNumber).Skip(skip).Take(pageSize).ToList();
+                        else
+                            data = results.OrderBy(m => m.VoucherNumber).Skip(skip).Take(pageSize).ToList();
+                        break;
+                    case "Age":
+                        if (sortColumnDir == "desc")
+                            data = results.OrderByDescending(m => m.Age).Skip(skip).Take(pageSize).ToList();
+                        else
+                            data = results.OrderBy(m => m.Age).Skip(skip).Take(pageSize).ToList();
+                        break;
+                    case "StationNumber":
+                        if (sortColumnDir == "desc")
+                            data = results.OrderByDescending(m => m.StationNumber).Skip(skip).Take(pageSize).ToList();
+                        else
+                            data = results.OrderBy(m => m.StationNumber).Skip(skip).Take(pageSize).ToList();
+                        break;
+                    case "Veteran":
+                        if (sortColumnDir == "desc")
+                            data = results.OrderByDescending(m => m.Veteran).Skip(skip).Take(pageSize).ToList();
+                        else
+                            data = results.OrderBy(m => m.Veteran).Skip(skip).Take(pageSize).ToList();
+                        break;
+                    default:
+                        data = results.OrderBy(m => m.VoucherNumber).Skip(skip).Take(pageSize).ToList();
+                        break;
+
+                }
+
+            }
+            else
+            {
+                data = results.OrderBy(m => m.VoucherNumber).Skip(skip).Take(pageSize).ToList();
+            }
+
+
+
+            recordsTotal = results.Count();
+
+            if (type == "mylist")
+            {
+                foreach (var item in data)
+                {
+                    item.IsReviewed = false;
+                    item.IsSubmitted = false;
+
+                    var corrections = VoucherCorrectionService.ExistingCorrections(item.VoucherId, Lifecycle.ReviewReady);
+
+                    if (corrections.Requested)
+                    {
+                        item.IsSubmitted = true;
+                    }
+
+                    if (corrections.Reviewed)
+                    {
+                        item.IsReviewed = true;
+                    }
+
+                }
+            }
+
+            return Json(new { draw = draw, recordsFiltered = recordsTotal, recordsTotal = recordsTotal, data = data }, JsonRequestBehavior.AllowGet);
+        }
+
+        [HttpGet]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult GetUnassignedVouchers()
+        {
+            var reviews = new VoucherService().GetPendingReviews(Asset, "cpac");
+            var model = new ReviewViewModels()
+            {
+                // retrieve pending review vouchers and filter local autheticated user out of the list
+                // issuer cannot review same voucher(s)
+                VouchersToReview = reviews.UnAssigned.Where(m => m.FinalizedByGuid != Asset.User.Guid && m.AssignToCertifyByGuid != Asset.User.Guid).ToHashSet(),
+                UserData = Asset.User
+            };
+
+            return PartialView("_AvailableVouchers", model);
+        }
+
+        [HttpGet]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult GetAssignedVouchers()
+        {
+            var reviews = new VoucherService().GetPendingReviews(Asset, "cpac");
+
+            var model = new ReviewViewModels()
+            {
+                // retrieve pending review vouchers and filter local autheticated user out of the list
+                // issuer cannot review same voucher(s)
+                VouchersToReview = reviews.Assigned,
+                UserData = Asset.User
+            };
+
+            return PartialView("_ClaimedVouchers", model);
+        }
+
+        [HttpGet]
+        [AuthorizationFilter(SecurableEnum = Securables.ReviewVouchers)]
+        public ActionResult ReleaseAssignedUserVoucher(string guid)
+        {
+            if (!string.IsNullOrEmpty(guid))
+            {
+                new VoucherService().UpdateReviewAssignments(Asset, "releaseAllByUser", 0, guid);
+            }
+
+            return null;
+        }
+    }
+
+}
