@@ -1,0 +1,24 @@
+version: '3'
+services:
+  db:
+    image: postgres
+    volumes:
+      - data:/var/lib/postgresql/data
+  web:
+    command: unicorn -c config/unicorn.rb
+    entrypoint: bin/wait-for-it.sh db:5432 -s --
+    environment:
+      DATABASE_URL: postgres://postgres@db/postgres
+    expose:
+      - '8080'
+    links:
+      - db
+  scheduler:
+    command: bin/schedule
+    entrypoint: bin/wait-for-it.sh db:5432 -s --
+    environment:
+      DATABASE_URL: postgres://postgres@db/postgres
+    links:
+      - db
+volumes:
+  data:
