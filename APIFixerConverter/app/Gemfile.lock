@@ -2,6 +2,7 @@ GEM
   remote: http://rubygems.org/
   specs:
     ast (2.3.0)
+    concurrent-ruby (1.1.10)
     et-orbi (1.0.8)
       tzinfo
     fixer (1.0.0)
@@ -44,10 +45,9 @@ GEM
       rack (~> 2.0)
       rack-protection (= 2.0.0)
       tilt (~> 2.0)
-    thread_safe (0.3.6)
     tilt (2.0.8)
-    tzinfo (1.2.4)
-      thread_safe (~> 0.1)
+    tzinfo (2.0.5)
+      concurrent-ruby (~> 1.0)
     unicode-display_width (1.3.0)
     unicorn (5.4.0)
       kgio (~> 2.6)
