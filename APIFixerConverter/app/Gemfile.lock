@@ -16,7 +16,7 @@ GEM
       ast (~> 2.3)
     pg (0.21.0)
     powerpack (0.1.1)
-    rack (2.0.3)
+    rack (2.2.6.4)
     rack-cors (1.0.2)
     rack-protection (2.0.0)
       rack
